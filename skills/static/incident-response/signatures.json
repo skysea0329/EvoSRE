@@ -1,0 +1,13 @@
+{
+  "version": "static-v1",
+  "rules": [
+    {"scenario": "db_pool_exhaustion", "tokens": ["queuepool", "pool waiters", "database connection"]},
+    {"scenario": "payment_timeout", "tokens": ["primary-pay", "payment-client timeout", "circuit breaker"]},
+    {"scenario": "bad_deployment", "tokens": ["couponprice", "version=2.4.0", "release marker"]},
+    {"scenario": "cache_outage", "tokens": ["redis-catalog", "cache retry", "database read volume"]},
+    {"scenario": "high_cpu", "tokens": ["rank_all_candidates", "exhaustive_scan", "event loop delay"]},
+    {"scenario": "memory_leak", "tokens": ["renderedtemplatecache", "oomkilled", "template_cache"]},
+    {"scenario": "kafka_lag", "tokens": ["partition=7", "dlq_enabled=false", "consumer_lag"]},
+    {"scenario": "pod_not_ready", "tokens": ["readiness probe failed", "/healthz", "no ready endpoints"]}
+  ]
+}

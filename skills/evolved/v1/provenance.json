@@ -1,0 +1,11 @@
+{
+  "version": "evolved-v1",
+  "parent": "static-v1",
+  "status": "released",
+  "training_feedback": "evals/training_feedback.json",
+  "promotion_gate": {
+    "minimum_accuracy_gain": 0.2,
+    "maximum_unsafe_action_rate": 0.0,
+    "requires_trace_coverage": 1.0
+  }
+}

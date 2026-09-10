@@ -1,0 +1,18 @@
+{
+  "dataset_version": "resolved-trajectories-v2",
+  "description": "Operator-verified signatures extracted only from resolved training trajectories.",
+  "resolved_trajectories": [
+    {"scenario":"db_pool_exhaustion","verified_signatures":["QueuePool checkout timeout","database connection waiters"],"generalized_patterns":["queue\\s*pool","connection (?:acquisition|lease|checkout)","wait(?:er|ing)"],"min_matches":2},
+    {"scenario":"payment_timeout","verified_signatures":["payment provider timeout","circuit breaker disabled"],"generalized_patterns":["payment (?:provider|gateway|upstream).*timeout","circuit breaker.*(?:off|disabled)","backup (?:route|provider).*healthy"],"min_matches":2},
+    {"scenario":"bad_deployment","verified_signatures":["coupon discount null","release 2.4.0 regression"],"generalized_patterns":["(?:coupon|discount).*(?:null|nil)","(?:release|version).*2\\.4\\.0","deploy(?:ment|ed).*(?:error|regression)"],"min_matches":2},
+    {"scenario":"cache_outage","verified_signatures":["Redis unreachable","retry amplification"],"generalized_patterns":["(?:redis|cache).*(?:refused|unreachable|outage)","retr(?:y|ies).*(?:amplif|exhaust)","database read.*(?:surge|increase|volume)"],"min_matches":2},
+    {"scenario":"high_cpu","verified_signatures":["exhaustive candidate ranking","CPU hot loop"],"generalized_patterns":["(?:rank|ranking).*(?:all|exhaustive).*candidate","cpu.*(?:saturat|99|hot)","event loop.*(?:delay|blocked)"],"min_matches":2},
+    {"scenario":"memory_leak","verified_signatures":["unbounded template cache","OOM retained heap"],"generalized_patterns":["template.*cache.*(?:unbounded|growth|retain)","(?:oom|out of memory|memory limit)","heap.*(?:template|retain)"],"min_matches":2},
+    {"scenario":"kafka_lag","verified_signatures":["partition 7 poison event","DLQ disabled"],"generalized_patterns":["(?:partition|shard).*7.*(?:blocked|stuck|poison)","(?:dead.?letter|dlq).*(?:off|disabled)","consumer.*(?:lag|backlog)"],"min_matches":2},
+    {"scenario":"pod_not_ready","verified_signatures":["readiness 404","healthz readyz mismatch"],"generalized_patterns":["readiness.*(?:404|not found|fail)","healthz.*readyz","(?:zero|no|0/3).*ready"],"min_matches":2},
+    {"scenario":"dns_failure","verified_signatures":["shipping NXDOMAIN","shipping-v1 renamed"],"generalized_patterns":["(?:nxdomain|name resolution|dns).*(?:shipping|ship)","shipping-v1.*shipping-api","host.*(?:not found|unresolved)"],"min_matches":2},
+    {"scenario":"certificate_expiry","verified_signatures":["x509 expired","rotation paused"],"generalized_patterns":["(?:x509|certificate).*(?:expired|past validity)","rotation.*(?:paused|disabled|stopped)","spiffe.*inventory"],"min_matches":2},
+    {"scenario":"disk_pressure","verified_signatures":["disk flood watermark","debug trace retention"],"generalized_patterns":["(?:disk|volume).*(?:97|full|flood)","debug.*trace.*(?:unbounded|retention|growth)","index.*(?:reject|read.only)"],"min_matches":2},
+    {"scenario":"rate_limit_misconfig","verified_signatures":["authenticated 429","crawler bucket precedence"],"generalized_patterns":["(?:429|rate limit).*(?:authenticated|user)","crawler.*(?:bucket|5.?rpm)","policy.*(?:precedence|ordering|v18)"],"min_matches":2}
+  ]
+}

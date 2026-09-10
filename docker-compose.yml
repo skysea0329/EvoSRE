@@ -1,0 +1,140 @@
+name: evosre
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: evosre
+      POSTGRES_PASSWORD: evosre-local-only
+      POSTGRES_DB: checkout
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evosre -d checkout"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  payment-provider:
+    build:
+      context: .
+      dockerfile: otel-lab/payment-provider/Dockerfile
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8020/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    ports:
+      - "8474:8474"
+    depends_on:
+      redis:
+        condition: service_healthy
+      payment-provider:
+        condition: service_healthy
+    restart: unless-stopped
+
+  otel-lgtm:
+    image: grafana/otel-lgtm:0.30.1
+    ports:
+      - "3000:3000"
+      - "4317:4317"
+      - "4318:4318"
+      - "9090:9090"
+      - "3100:3100"
+      - "3200:3200"
+    volumes:
+      - otel-lgtm-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:3000/api/health >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+    restart: unless-stopped
+
+  checkout-lab:
+    build:
+      context: .
+      dockerfile: otel-lab/checkout-service/Dockerfile
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm:4318
+      EVOSRE_LAB_TOKEN: ${EVOSRE_LAB_TOKEN:-evosre-local-lab-token}
+      POSTGRES_DSN: postgresql://evosre:evosre-local-only@postgres:5432/checkout
+      REDIS_URL: redis://toxiproxy:6380/0
+      TOXIPROXY_URL: http://toxiproxy:8474
+      PAYMENT_PRIMARY_URL: http://toxiproxy:8666/primary/authorize
+      PAYMENT_BACKUP_URL: http://payment-provider:8020/backup/authorize
+    depends_on:
+      otel-lgtm:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      toxiproxy:
+        condition: service_started
+    ports:
+      - "8010:8010"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      APP_ENV: production
+      DATABASE_PATH: /data/evosre.db
+      CORS_ORIGINS: http://localhost:8080
+      INVESTIGATION_STEP_DELAY_MS: 120
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OTEL_LAB_URL: http://checkout-lab:8010
+      PROMETHEUS_URL: http://otel-lgtm:9090
+      LOKI_URL: http://otel-lgtm:3100
+      TEMPO_URL: http://otel-lgtm:3200
+      OTEL_LAB_TOKEN: ${EVOSRE_LAB_TOKEN:-evosre-local-lab-token}
+    volumes:
+      - evosre-data:/data
+    depends_on:
+      checkout-lab:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  evosre-data:
+  otel-lgtm-data:
+  postgres-data:

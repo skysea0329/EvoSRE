@@ -1,0 +1,12 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "evosre-payment-provider"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.116,<1", "uvicorn[standard]>=0.35,<1"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
