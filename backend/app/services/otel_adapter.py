@@ -215,7 +215,7 @@ class OtelObservabilityAdapter:
         end = int(datetime.now(UTC).timestamp())
         start = end - 600
         traceql = (
-            f'{{ resource.service.name = "checkout-lab" && span.incident.id = "{incident.id}" }} '
+            f'{{ resource.service.name = "checkout-lab" && span."incident.id" = "{incident.id}" }} '
             "with (most_recent=true)"
         )
         traces: list[dict[str, Any]] = []

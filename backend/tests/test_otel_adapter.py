@@ -73,6 +73,7 @@ def handler(request: httpx.Request) -> httpx.Response:
         )
     if path == "/api/search":
         assert "otel-incident-1" in request.url.params["q"]
+        assert 'span."incident.id"' in request.url.params["q"]
         return httpx.Response(
             200,
             json={
