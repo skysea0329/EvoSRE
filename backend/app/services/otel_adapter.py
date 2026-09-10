@@ -78,8 +78,8 @@ class OtelObservabilityAdapter:
         self,
         endpoints: OtelEndpoints,
         transport: httpx.BaseTransport | None = None,
-        retry_attempts: int = 6,
-        retry_delay: float = 0.35,
+        retry_attempts: int = 30,
+        retry_delay: float = 0.5,
     ) -> None:
         self.endpoints = endpoints
         self._transport = transport

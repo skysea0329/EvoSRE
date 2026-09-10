@@ -152,3 +152,27 @@ def test_otel_lab_client_enforces_typed_action(endpoints: OtelEndpoints) -> None
     assert result["fault_active"] is False
     with pytest.raises(ValueError, match="only permits rollback_release"):
         client.execute(incident(), "delete_namespace", "approval-002")
+
+
+def test_tempo_query_tolerates_async_ingestion_delay(endpoints: OtelEndpoints) -> None:
+    attempts = 0
+
+    def delayed_handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        if request.url.path == "/api/search":
+            attempts += 1
+            if attempts < 3:
+                return httpx.Response(200, json={"traces": []})
+        return handler(request)
+
+    adapter = OtelObservabilityAdapter(
+        endpoints,
+        transport=httpx.MockTransport(delayed_handler),
+        retry_attempts=3,
+        retry_delay=0,
+    )
+
+    traces = adapter.query_traces(incident())
+
+    assert attempts == 3
+    assert traces.payload["spans"][0]["trace_id"] == "abc123"
