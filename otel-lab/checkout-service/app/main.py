@@ -75,6 +75,7 @@ class RuntimeState:
     generation: int = 0
     last_action: str | None = None
     last_idempotency_key: str | None = None
+    last_trace_id: str | None = None
     configuration: dict[str, Any] = field(default_factory=dict)
     updated_at: datetime = datetime.min.replace(tzinfo=UTC)
 
@@ -86,6 +87,7 @@ class StateView(BaseModel):
     fault_active: bool
     generation: int
     last_action: str | None
+    last_trace_id: str | None
     configuration: dict[str, Any]
     updated_at: datetime
 
@@ -144,6 +146,11 @@ class CheckoutLab:
                 configuration=configuration,
                 updated_at=datetime.now(UTC),
             )
+            return self._state
+
+    def record_trace(self, trace_id: str) -> RuntimeState:
+        with self._lock:
+            self._state = replace(self._state, last_trace_id=trace_id)
             return self._state
 
 
@@ -347,6 +354,7 @@ async def emit_probe(source: str = "traffic-generator") -> dict[str, object]:
         "deployment.version": state.release_version, "traffic.source": source,
     }
     with tracer.start_as_current_span("POST /checkout", attributes=attributes) as span:
+        trace_id = f"{span.get_span_context().trace_id:032x}"
         with tracer.start_as_current_span(f"probe {state.scenario}"):
             healthy, detail, measured_ms = await dependencies.probe(state)
         request_counter.add(1, {"incident_id": state.incident_id, "scenario": state.scenario, "outcome": "ok" if healthy else "error", "release_version": state.release_version})
@@ -368,7 +376,13 @@ async def emit_probe(source: str = "traffic-generator") -> dict[str, object]:
             logging.getLogger("checkout").error(message)
             span.record_exception(RuntimeError(detail))
             span.set_status(Status(StatusCode.ERROR, state.scenario))
-        return {"status": 200 if healthy else 500, "duration_ms": round(measured_ms, 2), "detail": detail}
+        lab.record_trace(trace_id)
+        return {
+            "status": 200 if healthy else 500,
+            "duration_ms": round(measured_ms, 2),
+            "detail": detail,
+            "trace_id": trace_id,
+        }
 
 
 async def traffic_loop(stop: asyncio.Event) -> None:
@@ -440,7 +454,7 @@ async def inject_fault(scenario: str, payload: InjectRequest, x_evosre_lab_token
     configuration = await dependencies.inject(scenario)
     current = lab.inject(payload.incident_id, scenario, configuration)
     await emit_probe("fault-injector")
-    return view(current)
+    return view(lab.state())
 
 
 @app.post("/admin/actions/{action}", response_model=StateView)
@@ -461,4 +475,4 @@ async def execute_action(action: str, payload: ActionRequest, x_evosre_lab_token
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     await emit_probe("remediation-verifier")
-    return view(updated)
+    return view(lab.state())

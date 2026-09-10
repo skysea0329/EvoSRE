@@ -22,6 +22,7 @@ def incident() -> IncidentRecord:
         reporter="OTel test",
         created_at=now,
         updated_at=now,
+        metadata={"otel_lab_state": {"last_trace_id": "abc123"}},
     )
 
 
@@ -72,8 +73,7 @@ def handler(request: httpx.Request) -> httpx.Response:
             },
         )
     if path == "/api/search":
-        assert "otel-incident-1" in request.url.params["q"]
-        assert 'span."incident.id"' in request.url.params["q"]
+        assert 'trace:id = "abc123"' in request.url.params["q"]
         return httpx.Response(
             200,
             json={
@@ -176,4 +176,25 @@ def test_tempo_query_tolerates_async_ingestion_delay(endpoints: OtelEndpoints) -
     traces = adapter.query_traces(incident())
 
     assert attempts == 3
+    assert traces.payload["spans"][0]["trace_id"] == "abc123"
+
+
+def test_tempo_query_falls_back_to_direct_trace_lookup(endpoints: OtelEndpoints) -> None:
+    def direct_handler(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/api/search":
+            return httpx.Response(200, json={"traces": []})
+        if request.url.path == "/api/traces/abc123":
+            return httpx.Response(200, json={"batches": [{"resource": {}}]})
+        return handler(request)
+
+    adapter = OtelObservabilityAdapter(
+        endpoints,
+        transport=httpx.MockTransport(direct_handler),
+        retry_attempts=1,
+        retry_delay=0,
+    )
+
+    traces = adapter.query_traces(incident())
+
+    assert traces.payload["lookup"] == "trace-id"
     assert traces.payload["spans"][0]["trace_id"] == "abc123"

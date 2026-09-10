@@ -214,11 +214,14 @@ class OtelObservabilityAdapter:
     def query_traces(self, incident: IncidentRecord) -> EvidenceItem:
         end = int(datetime.now(UTC).timestamp())
         start = end - 600
+        trace_id = str(incident.metadata.get("otel_lab_state", {}).get("last_trace_id") or "")
         traceql = (
-            f'{{ resource.service.name = "checkout-lab" && span."incident.id" = "{incident.id}" }} '
-            "with (most_recent=true)"
+            f'{{ trace:id = "{trace_id}" }}'
+            if trace_id
+            else f'{{ resource.service.name = "checkout-lab" && span."incident.id" = "{incident.id}" }}'
         )
         traces: list[dict[str, Any]] = []
+        direct_trace: dict[str, Any] | None = None
         for attempt in range(self.retry_attempts):
             with self._client() as client:
                 response = client.get(
@@ -232,6 +235,24 @@ class OtelObservabilityAdapter:
                 break
             if attempt + 1 < self.retry_attempts:
                 time.sleep(self.retry_delay)
+        if not traces and trace_id:
+            for attempt in range(self.retry_attempts):
+                with self._client() as client:
+                    response = client.get(f"{self.endpoints.tempo}/api/traces/{trace_id}")
+                    if response.status_code == 200:
+                        direct_trace = response.json()
+                        if direct_trace:
+                            traces = [{
+                                "traceID": trace_id,
+                                "rootServiceName": "checkout-lab",
+                                "rootTraceName": "POST /checkout",
+                                "durationMs": 0,
+                            }]
+                            break
+                    elif response.status_code != 404:
+                        response.raise_for_status()
+                if attempt + 1 < self.retry_attempts:
+                    time.sleep(self.retry_delay)
         if not traces:
             raise ObservabilityUnavailable(f"Tempo returned no traces for incident {incident.id}")
         with self._client() as client:
@@ -254,7 +275,13 @@ class OtelObservabilityAdapter:
             "Tempo traces queried",
             f"Tempo returned {len(traces)} incident-correlated traces via TraceQL.",
             f"{self.endpoints.tempo}/api/search",
-            {"traceql": traceql, "spans": spans, "raw": traces, "backend": "tempo"},
+            {
+                "traceql": traceql,
+                "spans": spans,
+                "raw": direct_trace or traces,
+                "lookup": "trace-id" if trace_id else "incident-attribute",
+                "backend": "tempo",
+            },
         )
 
     def status(self) -> ObservabilityStatus:
